@@ -27,8 +27,8 @@ def run_agent(request: AskRequest) -> dict:
     return result
 
 
-def build_response(result: dict, cached: bool = False) -> AskResponse:
-    trace = CragTrace(
+def _make_trace(result: dict) -> CragTrace:
+    return CragTrace(
         attempted=result.get("attempted_rewrite", False),
         rewritten_query=result.get("rewritten_query"),
         initial_usable=bool(result.get("initial_usable")) if result.get("initial_usable") is not None else False,
@@ -39,11 +39,14 @@ def build_response(result: dict, cached: bool = False) -> AskResponse:
             for g in result.get("grades_trace", [])
         ],
     )
+
+
+def build_response(result: dict, cached: bool = False) -> AskResponse:
     return AskResponse(
         answer=result.get("answer", ""),
         citations=to_citations(result.get("selected_docs", [])),
         cached=cached,
-        crag=trace,
+        crag=_make_trace(result),
     )
 
 
@@ -87,7 +90,7 @@ def ask_stream(request: AskRequest):
         ]
         yield _sse({"type": "sources", "data": [h.model_dump() for h in hits]})
         if result:
-            yield _sse({"type": "crag", "data": _trace_of(result).model_dump()})
+            yield _sse({"type": "crag", "data": _make_trace(result).model_dump()})
             yield _sse({"type": "guardrail", "data": {"refused": result.get("refused", False)}})
 
         answer_text = cached["answer"] if cached else result.get("answer", "")
@@ -101,26 +104,12 @@ def ask_stream(request: AskRequest):
                 {
                     "answer": answer_text,
                     "citations": [c.model_dump() for c in to_citations(result.get("selected_docs", []))],
-                    "crag": _trace_of(result).model_dump(),
+                    "crag": _make_trace(result).model_dump(),
                 },
             )
         yield _sse({"type": "done", "data": ""})
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
-
-
-def _trace_of(result: dict) -> CragTrace:
-    return CragTrace(
-        attempted=result.get("attempted_rewrite", False),
-        rewritten_query=result.get("rewritten_query"),
-        initial_usable=bool(result.get("initial_usable")) if result.get("initial_usable") is not None else False,
-        final_usable=bool(result.get("final_usable")),
-        refused=result.get("refused", False),
-        grades=[
-            GradeOut(index=g["index"], title=g.get("title", ""), grade=g["grade"], reason=g.get("reason", ""))
-            for g in result.get("grades_trace", [])
-        ],
-    )
 
 
 def split_tokens(text: str, size: int = 4) -> list[str]:

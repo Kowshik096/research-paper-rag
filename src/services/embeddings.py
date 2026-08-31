@@ -62,7 +62,7 @@ def _embed_batched(texts: list[str], batch_size: int, max_retries: int, model: s
     settings = get_settings()
     model = model or settings.gemini_embedding_model
     client = get_client()
-    effective_batch = 1 if "embedding-2" in model else batch_size
+    effective_batch = _batch_size_for_model(model, batch_size)
     vectors: list[list[float]] = []
     for start in range(0, len(texts), effective_batch):
         batch = texts[start : start + effective_batch]
@@ -82,12 +82,12 @@ def _embed_batched(texts: list[str], batch_size: int, max_retries: int, model: s
                 err = str(exc)
                 if attempt == max_retries - 1:
                     raise
-                if "PerDay" in err:
+                if _is_quota_exhausted(err):
                     raise RuntimeError(
                         f"Daily embedding quota exhausted for {model}. "
                         "Re-run with a fallback model; cached chunks are reused automatically."
                     ) from exc
-                if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                if _is_rate_limited(err):
                     match = _RETRY_DELAY.search(err)
                     wait = min(float(match.group(1)) + 2, 300) if match else 60
                 else:
@@ -96,6 +96,23 @@ def _embed_batched(texts: list[str], batch_size: int, max_retries: int, model: s
                 time.sleep(wait)
         time.sleep(2)
     return vectors
+
+
+def _batch_size_for_model(model: str, default_batch: int) -> int:
+    model_lower = model.lower()
+    if "embedding-2" in model_lower:
+        return 1
+    if "embedding-3" in model_lower:
+        return 4
+    return default_batch
+
+
+def _is_quota_exhausted(error_msg: str) -> bool:
+    return "quota" in error_msg.lower() or "perday" in error_msg.lower() or "daily limit" in error_msg.lower()
+
+
+def _is_rate_limited(error_msg: str) -> bool:
+    return "429" in error_msg or "resource_exhausted" in error_msg.lower() or "rate limit" in error_msg.lower()
 
 
 def embed_texts(
