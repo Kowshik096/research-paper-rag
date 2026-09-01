@@ -9,6 +9,7 @@ from google import genai
 from google.genai import types
 
 from src.config import get_settings
+from src.services.telemetry import record_cache, record_embedding, traced
 
 _client = None
 CACHE_PATH = Path("data/embedding_cache.sqlite3")
@@ -115,6 +116,7 @@ def _is_rate_limited(error_msg: str) -> bool:
     return "429" in error_msg or "resource_exhausted" in error_msg.lower() or "rate limit" in error_msg.lower()
 
 
+@traced("embed_texts")
 def embed_texts(
     texts: list[str], batch_size: int = 16, max_retries: int = 8, model: str | None = None
 ) -> list[list[float]]:
@@ -134,9 +136,13 @@ def embed_texts(
     conn = _cache_conn()
     try:
         cached = _load_cached(conn, keys)
+        hit_count = sum(1 for k in keys if k in cached)
+        record_cache(hit_count > 0)
         missing_texts = list({t for t, k in zip(texts, keys, strict=True) if k not in cached})
         if missing_texts:
+            start = time.perf_counter()
             fresh = do_embed(missing_texts)
+            record_embedding(time.perf_counter() - start, model)
             fresh_keys = [_cache_key(model, settings.embed_dim, t) for t in missing_texts]
             conn.executemany(
                 "INSERT OR REPLACE INTO cache (key, vector) VALUES (?, ?)",
@@ -149,6 +155,7 @@ def embed_texts(
         conn.close()
 
 
+@traced("embed_query")
 def embed_query(text: str, model: str | None = None) -> list[float]:
     return embed_texts([text], model=model)[0]
 

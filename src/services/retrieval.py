@@ -1,3 +1,9 @@
+import time
+
+from src.services.telemetry import record_retrieval, traced
+
+
+@traced("reciprocal_rank_fusion")
 def reciprocal_rank_fusion(result_lists: list[list[dict]], k: int = 60, top_k: int = 6) -> list[dict]:
     scores: dict[str, float] = {}
     docs: dict[str, dict] = {}
@@ -15,12 +21,20 @@ def reciprocal_rank_fusion(result_lists: list[list[dict]], k: int = 60, top_k: i
     return fused
 
 
+@traced("hybrid_search")
 def hybrid_search(
     query: str, query_embedding: list[float], top_k: int, index_name: str | None = None
 ) -> list[dict]:
     from src.services import opensearch_service as oss
 
     kwargs = {} if index_name is None else {"index_name": index_name}
+
+    start = time.perf_counter()
     bm25_results = oss.bm25_search(query, top_k=top_k * 2, **kwargs)
+    record_retrieval(time.perf_counter() - start, "bm25")
+
+    start = time.perf_counter()
     vector_results = oss.vector_search(query_embedding, top_k=top_k * 2, **kwargs)
+    record_retrieval(time.perf_counter() - start, "vector")
+
     return reciprocal_rank_fusion([bm25_results, vector_results], top_k=top_k)

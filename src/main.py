@@ -1,7 +1,8 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
@@ -11,6 +12,7 @@ from src.services.cache import get_client as get_redis
 from src.services.opensearch_service import get_client as get_oss
 from src.services.opensearch_service import init_index
 from src.services.postgres import get_engine, init_db
+from src.services.telemetry import init_telemetry, record_request
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,6 +21,7 @@ logging.basicConfig(level=logging.INFO)
 async def lifespan(_app: FastAPI):
     init_db()
     init_index()
+    init_telemetry(_app)
     yield
 
 
@@ -31,6 +34,15 @@ if settings.api_key:
 app.include_router(papers.router)
 app.include_router(search.router)
 app.include_router(ask.router)
+
+
+@app.middleware("http")
+async def telemetry_middleware(request: Request, call_next):
+    start = time.perf_counter()
+    response: Response = await call_next(request)
+    duration = time.perf_counter() - start
+    record_request(request.method, request.url.path, response.status_code, duration)
+    return response
 
 
 @app.get("/health")

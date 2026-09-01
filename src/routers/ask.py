@@ -9,6 +9,7 @@ from src.schemas import AskRequest, AskResponse, Citation, CragTrace, GradeOut, 
 from src.services import cache as cache_service
 from src.services.agent_graph import build_agent_graph, initial_state
 from src.services.auth import verify_api_key
+from src.services.telemetry import record_cache, record_tokens, traced
 
 router = APIRouter(tags=["ask"], dependencies=[Depends(verify_api_key)])
 
@@ -22,6 +23,7 @@ def to_citations(docs: list[dict]) -> list[Citation]:
     ]
 
 
+@traced("run_agent")
 def run_agent(request: AskRequest) -> dict:
     settings = get_settings()
     result = _agent.invoke(initial_state(request.question, request.top_k or settings.top_k))
@@ -56,10 +58,12 @@ def ask(request: AskRequest):
     payload = {"question": request.question, "top_k": request.top_k}
     cached = cache_service.get_cached("ask", payload)
     if cached:
+        record_cache(True)
         cached["cached"] = True
         return AskResponse(**cached)
 
     response = build_response(run_agent(request))
+    record_cache(False)
     cache_service.set_cached(
         "ask",
         payload,
@@ -95,6 +99,8 @@ def ask_stream(request: AskRequest):
             yield _sse({"type": "guardrail", "data": {"refused": result.get("refused", False)}})
 
         answer_text = cached["answer"] if cached else result.get("answer", "")
+        if not cached:
+            record_tokens(len(answer_text), get_settings().gemini_chat_model)
         for token in split_tokens(answer_text):
             yield _sse({"type": "token", "data": token})
 
