@@ -1,12 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from src.config import get_settings
 from src.schemas import SearchHit, SearchRequest
 from src.services import embeddings as embeddings_service
 from src.services import opensearch_service as oss
+from src.services.auth import verify_api_key
 from src.services.retrieval import hybrid_search
 
-router = APIRouter(prefix="/api/v1/search", tags=["search"])
+router = APIRouter(prefix="/api/v1/search", tags=["search"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post("", response_model=list[SearchHit])

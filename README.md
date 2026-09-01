@@ -5,6 +5,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system over arXiv pa
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)
 ![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-orange)
+![CI](https://github.com/<your-user>/<repo>/actions/workflows/ci.yml/badge.svg)
 
 ## Architecture
 

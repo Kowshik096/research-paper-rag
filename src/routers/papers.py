@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from src.schemas import IngestRequest, PaperOut
+from src.services.auth import verify_api_key
 from src.services.ingest import ingest_papers
 from src.services.postgres import get_session_factory
 
-router = APIRouter(prefix="/api/v1/papers", tags=["papers"])
+router = APIRouter(prefix="/api/v1/papers", tags=["papers"], dependencies=[Depends(verify_api_key)])
 
 
 def get_db():

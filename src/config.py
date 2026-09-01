@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     top_k: int = 6
     cache_ttl: int = 86400
+    api_key: str = ""
+    rate_limit_rpm: int = 60
 
 
 @lru_cache

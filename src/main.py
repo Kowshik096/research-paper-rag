@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.routers import ask, papers, search
+from src.services.auth import RateLimitMiddleware
 from src.services.cache import get_client as get_redis
 from src.services.opensearch_service import get_client as get_oss
 from src.services.opensearch_service import init_index
@@ -24,6 +25,9 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="Hybrid RAG Research Assistant", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+settings = get_settings()
+if settings.api_key:
+    app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_rpm)
 app.include_router(papers.router)
 app.include_router(search.router)
 app.include_router(ask.router)

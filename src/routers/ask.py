@@ -1,15 +1,16 @@
 import json
 from collections.abc import Iterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from src.config import get_settings
 from src.schemas import AskRequest, AskResponse, Citation, CragTrace, GradeOut, SearchHit
 from src.services import cache as cache_service
 from src.services.agent_graph import build_agent_graph, initial_state
+from src.services.auth import verify_api_key
 
-router = APIRouter(tags=["ask"])
+router = APIRouter(tags=["ask"], dependencies=[Depends(verify_api_key)])
 
 _agent = build_agent_graph()
 
