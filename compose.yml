@@ -41,6 +41,14 @@ services:
       timeout: 3s
       retries: 10
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    ports:
+      - "16686:16686"  # UI
+      - "4318:4318"    # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
   api:
     build: .
     env_file: .env
@@ -52,6 +60,7 @@ services:
       HF_HUB_CACHE: /app/hf_cache/hub
       SENTENCE_TRANSFORMERS_HOME: /app/hf_cache
       TRANSFORMERS_CACHE: /app/hf_cache/hub
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
     volumes:
       - ./hf_cache:/app/hf_cache:ro
     ports:
@@ -63,6 +72,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
 volumes:
   pgdata:

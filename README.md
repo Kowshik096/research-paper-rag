@@ -5,6 +5,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system over arXiv pa
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)
 ![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-orange)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-instrumented-blueviolet)
 ![CI](https://github.com/<your-user>/<repo>/actions/workflows/ci.yml/badge.svg)
 
 ## Architecture
@@ -40,6 +41,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system over arXiv pa
 - **Caching**: exact-match Redis cache on (question, top_k) — repeat queries return instantly
 - **Evaluation harness**: golden Q&A dataset, keyword recall + LLM-judged faithfulness metrics
 - **Containerized**: one `docker compose up` starts everything
+- **Observability**: OpenTelemetry tracing (spans for retrieval, embedding, agent nodes) + metrics (latency, cache hits, token counts) exported via OTLP to Jaeger/Grafana/Zipkin
 
 ## Quick start
 
