@@ -57,9 +57,12 @@ def test_grade_route_rewrites_once_then_generates():
 
 
 def test_graph_compiles_and_mermaid_exportable():
-    # Skip: requires full langgraph + dependencies not available in test env
-    import pytest
-    pytest.skip("Requires langgraph + orjson + opensearchpy; run in Docker/WSL")
+    from src.services.agent_graph import build_agent_graph
+
+    app = build_agent_graph()
+    mermaid = app.get_graph().draw_mermaid()
+    assert "guardrail" in mermaid
+    assert "generate" in mermaid
 
 
 def test_generate_node_refuses_when_all_docs_incorrect():
