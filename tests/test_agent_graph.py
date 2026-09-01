@@ -60,3 +60,40 @@ def test_graph_compiles_and_mermaid_exportable():
     # Skip: requires full langgraph + dependencies not available in test env
     import pytest
     pytest.skip("Requires langgraph + orjson + opensearchpy; run in Docker/WSL")
+
+
+def test_generate_node_refuses_when_all_docs_incorrect():
+    """generate_node must NOT feed incorrect docs to LLM; returns refusal answer."""
+    from src.services.agent_routing import generate_node
+
+    state = {
+        "graded": [{"grade": "incorrect", "content": "wrong"}],
+        "selected_docs": [],
+        "final_usable": False,
+        "answer": "",
+    }
+    result = generate_node(state)
+    assert result["selected_docs"] == []
+    assert result["final_usable"] is False
+    assert "could not find" in result["answer"].lower()
+
+
+def test_generate_node_uses_correct_docs():
+    """generate_node selects correct docs and produces answer."""
+    from unittest.mock import patch
+
+    from src.services.agent_routing import generate_node
+
+    correct_doc = {"grade": "correct", "content": "good", "title": "T", "section": "s"}
+    state = {
+        "question": "q",
+        "graded": [correct_doc],
+        "selected_docs": [],
+        "final_usable": False,
+        "answer": "",
+    }
+    with patch("src.services.agent_routing.llm.answer", return_value="answer"):
+        result = generate_node(state)
+    assert result["selected_docs"] == [correct_doc]
+    assert result["final_usable"] is True
+    assert result["answer"] == "answer"

@@ -73,7 +73,9 @@ def select_context(graded_docs: list[dict]) -> list[dict]:
     if correct:
         return correct
     ambiguous = [d for d in graded_docs if d["grade"] == "ambiguous"]
-    return ambiguous or graded_docs
+    if ambiguous:
+        return ambiguous
+    return []
 
 
 def rewrite_query(question: str, graded_docs: list[dict]) -> str:

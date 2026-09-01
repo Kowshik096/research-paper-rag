@@ -5,11 +5,12 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from src.config import get_settings
-from src.services import crag, llm
+from src.services import crag
 from src.services import embeddings as embeddings_service
 from src.services import opensearch_service as oss
 from src.services.agent_routing import (
     AgentState,
+    generate_node,
     route_after_grade,
     route_after_guardrail,
     route_after_retrieve,
@@ -100,13 +101,6 @@ def rewrite_node(state: AgentState) -> dict[str, Any]:
         "rewritten_query": rewritten,
         "attempted_rewrite": True,
     }
-
-
-def generate_node(state: AgentState) -> dict[str, Any]:
-    graded = state["graded"]
-    selected = crag.select_context([d for d in graded if d["grade"] != "incorrect"]) or graded
-    answer = llm.answer(state["question"], selected)
-    return {"selected_docs": selected, "final_usable": crag.has_usable(graded), "answer": answer}
 
 
 def refuse_node(state: AgentState) -> dict[str, Any]:

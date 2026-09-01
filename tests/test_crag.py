@@ -27,4 +27,4 @@ def test_select_context_prefers_correct_then_ambiguous():
     incorrect = {"grade": "incorrect", "content": "i"}
     assert select_context([correct, incorrect]) == [correct]
     assert select_context([ambiguous, incorrect]) == [ambiguous]
-    assert select_context([incorrect]) == [incorrect]
+    assert select_context([incorrect]) == []

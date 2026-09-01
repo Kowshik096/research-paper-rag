@@ -1,4 +1,6 @@
-from typing import TypedDict
+from typing import Any, TypedDict
+
+from src.services import crag, llm
 
 MAX_ATTEMPTS = 2
 
@@ -57,3 +59,17 @@ def route_after_grade(state: AgentState) -> str:
     if state["attempt"] + 1 < MAX_ATTEMPTS and state.get("initial_usable") is False:
         return "rewrite"
     return "generate"
+
+
+def generate_node(state: AgentState) -> dict[str, Any]:
+    graded = state["graded"]
+    usable = [d for d in graded if d["grade"] != "incorrect"]
+    if not usable:
+        return {
+            "selected_docs": [],
+            "final_usable": False,
+            "answer": "I could not find this in the indexed papers.",
+        }
+    selected = crag.select_context(usable)
+    answer = llm.answer(state["question"], selected)
+    return {"selected_docs": selected, "final_usable": crag.has_usable(graded), "answer": answer}
