@@ -5,6 +5,7 @@ import time
 
 sys.path.insert(0, ".")
 
+from evals.metrics import compute_latency_summary, evaluate_retrieval_case
 from src.services import embeddings, reranker
 from src.services import opensearch_service as oss
 from src.services.experiments import DEFAULT_MATRIX, build_benchmark_index
@@ -12,12 +13,12 @@ from src.services.retrieval import reciprocal_rank_fusion
 
 
 def evaluate_index(index_name: str, mode: str, cases: list[dict], k: int = 5, embed_model: str | None = None) -> dict:
-    hits_at_k = 0
-    reciprocal_ranks = []
+    case_results = []
     latencies: list[float] = []
+
     for case in cases:
         query = case["question"]
-        expected = case["arxiv_id"]
+        expected = [case["arxiv_id"]]
         start = time.perf_counter()
         if mode == "bm25":
             results = oss.bm25_search(query, top_k=10, index_name=index_name)
@@ -43,16 +44,39 @@ def evaluate_index(index_name: str, mode: str, cases: list[dict], k: int = 5, em
                     ],
                     top_k=10,
                 )
-        latencies.append((time.perf_counter() - start) * 1000)
+        latency_ms = (time.perf_counter() - start) * 1000
+        latencies.append(latency_ms)
+
         doc_ids = [r.get("arxiv_id", "") for r in results]
-        rank = next((i + 1 for i, d in enumerate(doc_ids) if d == expected), None)
-        if rank and rank <= k:
-            hits_at_k += 1
-            reciprocal_ranks.append(1.0 / rank)
+        case_res = evaluate_retrieval_case(query, doc_ids, expected, latency_ms=latency_ms)
+        case_results.append(case_res)
 
     n = max(1, len(cases))
-    avg_ms = round(sum(latencies) / len(latencies), 1) if latencies else 0
-    return {"hit_at_k": round(hits_at_k / n, 3), "mrr": round(sum(reciprocal_ranks) / n, 3), "latency_ms": avg_ms}
+    lat_summary = compute_latency_summary(latencies)
+
+    avg_mrr = sum(c.mrr for c in case_results) / n
+    avg_hit_1 = sum(c.hit_at_1 for c in case_results) / n
+    avg_hit_3 = sum(c.hit_at_3 for c in case_results) / n
+    avg_hit_5 = sum(c.hit_at_5 for c in case_results) / n
+    avg_hit_10 = sum(c.hit_at_10 for c in case_results) / n
+    avg_p5 = sum(c.precision_at_5 for c in case_results) / n
+    avg_r5 = sum(c.recall_at_5 for c in case_results) / n
+    avg_ndcg5 = sum(c.ndcg_at_5 for c in case_results) / n
+
+    return {
+        "hit_at_k": round(avg_hit_5, 3),  # Backwards compatibility
+        "hit_at_1": round(avg_hit_1, 3),
+        "hit_at_3": round(avg_hit_3, 3),
+        "hit_at_5": round(avg_hit_5, 3),
+        "hit_at_10": round(avg_hit_10, 3),
+        "mrr": round(avg_mrr, 3),
+        "precision_at_5": round(avg_p5, 3),
+        "recall_at_5": round(avg_r5, 3),
+        "ndcg_at_5": round(avg_ndcg5, 3),
+        "latency_ms": lat_summary.mean,  # Backwards compatibility
+        "latency_median_ms": lat_summary.median,
+        "latency_p95_ms": lat_summary.p95,
+    }
 
 
 def main() -> None:
@@ -64,6 +88,8 @@ def main() -> None:
         "--embed-model", default=None, help="Pin one embedding model for all configs (overrides fallback chain)"
     )
     parser.add_argument("--eval-only", action="store_true", help="Skip index builds; evaluate existing indices")
+    parser.add_argument("--baseline", type=str, default=None, help="Path to baseline benchmark JSON to compare against")
+    parser.add_argument("--out", type=str, default="evals/benchmark_results.json", help="Path to save benchmark JSON")
     args = parser.parse_args()
 
     with open("evals/golden_retrieval.jsonl", encoding="utf-8") as f:
@@ -99,29 +125,47 @@ def main() -> None:
             metrics = evaluate_index(index_name, mode, cases, k=args.k, embed_model=current_model or None)
             rows.append(
                 {
-                    "config": config.name, "strategy": config.strategy,
-                    "size": config.size, "overlap": config.overlap,
-                    "mode": mode, "embed_model": current_model, **metrics,
+                    "config": config.name,
+                    "strategy": config.strategy,
+                    "size": config.size,
+                    "overlap": config.overlap,
+                    "mode": mode,
+                    "embed_model": current_model,
+                    **metrics,
                 }
             )
             print(
-                f"{config.name:<16} {mode:<13} hit@{args.k}={metrics['hit_at_k']:.2f}  "
-                f"mrr={metrics['mrr']:.2f}  {metrics['latency_ms']}ms"
+                f"{config.name:<16} {mode:<13} hit@1={metrics['hit_at_1']:.2f}  "
+                f"hit@{args.k}={metrics['hit_at_5']:.2f}  mrr={metrics['mrr']:.2f}  "
+                f"p@5={metrics['precision_at_5']:.2f}  r@5={metrics['recall_at_5']:.2f}  "
+                f"lat_p95={metrics['latency_p95_ms']}ms"
             )
         print()
 
-    rows.sort(key=lambda r: (-r["hit_at_k"], -r["mrr"]))
+    rows.sort(key=lambda r: (-r["hit_at_5"], -r["mrr"]))
     best = rows[0]
     print("=" * 60)
     print(
         f"BEST CONFIG: {best['config']} ({best['mode']})  "
-        f"hit@{args.k}={best['hit_at_k']}  mrr={best['mrr']}  {best['latency_ms']}ms"
+        f"hit@1={best['hit_at_1']}  hit@{args.k}={best['hit_at_5']}  "
+        f"mrr={best['mrr']}  lat_p95={best['latency_p95_ms']}ms"
     )
     print("=" * 60)
 
-    with open("evals/benchmark_results.json", "w", encoding="utf-8") as f:
+    with open(args.out, "w", encoding="utf-8") as f:
         json.dump(rows, f, indent=2)
-    print("Saved to evals/benchmark_results.json")
+    print(f"Saved to {args.out}")
+
+    if args.baseline:
+        try:
+            from evals.regression import compare_benchmarks, format_markdown_report
+
+            with open(args.baseline, encoding="utf-8") as f:
+                base_data = json.load(f)
+            report = compare_benchmarks(base_data, rows)
+            print("\n" + format_markdown_report(report))
+        except Exception as exc:
+            print(f"Warning: Baseline comparison failed: {exc}")
 
 
 if __name__ == "__main__":
