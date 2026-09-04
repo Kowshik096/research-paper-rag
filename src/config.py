@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     cache_ttl: int = 86400
     api_key: str = ""
     rate_limit_rpm: int = 60
+    cors_origins: str = "*"
 
 
 @lru_cache

@@ -1,8 +1,22 @@
-def split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> list[str]:
-    text = " ".join(text.split())
-    if not text:
+import re
+
+
+def _normalize_paragraphs(text: str) -> list[str]:
+    if not text or not text.strip():
         return []
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    raw_paras = re.split(r"\n\s*\n", text)
+    paragraphs = []
+    for p in raw_paras:
+        clean = " ".join(p.split())
+        if clean:
+            paragraphs.append(clean)
+    return paragraphs
+
+
+def split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> list[str]:
+    paragraphs = _normalize_paragraphs(text)
+    if not paragraphs:
+        return []
     chunks: list[str] = []
     current = ""
     for para in paragraphs:
@@ -11,7 +25,7 @@ def split_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> list[st
                 chunks.append(current)
                 current = ""
             chunks.append(para[:chunk_size])
-            para = para[chunk_size - overlap:]
+            para = para[chunk_size - overlap :]
         if len(current) + len(para) + 1 <= chunk_size:
             current = f"{current} {para}".strip()
         else:

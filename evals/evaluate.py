@@ -6,9 +6,11 @@ import time
 
 sys.path.insert(0, ".")
 
+import os
+
 import httpx
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 
 def call_rag(question: str) -> dict:

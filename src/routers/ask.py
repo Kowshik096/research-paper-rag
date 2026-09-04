@@ -7,7 +7,8 @@ from fastapi.responses import StreamingResponse
 from src.config import get_settings
 from src.schemas import AskRequest, AskResponse, Citation, CragTrace, GradeOut, SearchHit
 from src.services import cache as cache_service
-from src.services.agent_graph import build_agent_graph, initial_state
+from src.services.agent_graph import build_agent_graph
+from src.services.agent_routing import initial_state
 from src.services.auth import verify_api_key
 from src.services.telemetry import record_cache, record_tokens, traced
 
@@ -98,7 +99,7 @@ def ask_stream(request: AskRequest):
             yield _sse({"type": "crag", "data": _make_trace(result).model_dump()})
             yield _sse({"type": "guardrail", "data": {"refused": result.get("refused", False)}})
 
-        answer_text = cached["answer"] if cached else result.get("answer", "")
+        answer_text = cached["answer"] if cached else (result.get("answer", "") if result else "")
         if not cached:
             record_tokens(len(answer_text), get_settings().gemini_chat_model)
         for token in split_tokens(answer_text):

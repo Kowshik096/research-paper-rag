@@ -5,22 +5,15 @@ import sqlite3
 import time
 from pathlib import Path
 
-from google import genai
 from google.genai import types
 
 from src.config import get_settings
+from src.services.ai_client import get_gemini_client
 from src.services.telemetry import record_cache, record_embedding, traced
 
-_client = None
+get_client = get_gemini_client
 CACHE_PATH = Path("data/embedding_cache.sqlite3")
 _RETRY_DELAY = re.compile(r"retry in ([\d.]+)s", re.IGNORECASE)
-
-
-def get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client(api_key=get_settings().gemini_api_key)
-    return _client
 
 
 def _cache_conn() -> sqlite3.Connection:

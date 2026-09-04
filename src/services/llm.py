@@ -39,9 +39,9 @@ def _stream_gemini(prompt: str, question: str) -> Iterator[str]:
 
 
 def _gemini_client():
-    from src.services.embeddings import get_client
+    from src.services.ai_client import get_gemini_client
 
-    return get_client()
+    return get_gemini_client()
 
 
 def _stream_openai_compatible(prompt: str, question: str) -> Iterator[str]:
