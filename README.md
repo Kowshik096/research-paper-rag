@@ -6,7 +6,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system over arXiv pa
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)
 ![OpenSearch](https://img.shields.io/badge/OpenSearch-2.19-orange)
 ![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-instrumented-blueviolet)
-![CI](https://github.com/<your-user>/<repo>/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Kowshik096/research-paper-rag/actions/workflows/ci.yml/badge.svg)
 
 ## Architecture
 
@@ -37,7 +37,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system over arXiv pa
 - **Streaming RAG**: Server-Sent Events token streaming with numbered inline citations `[1]`, `[2]`
 - **Grounding guardrail**: model answers only from retrieved context; says "not found" otherwise
 - **Corrective RAG (CRAG) loop**: an LLM grader classifies every retrieved chunk (`correct` / `ambiguous` / `incorrect`); if none pass, a query rewriter expands terminology and retrieval retries once. The full trace (grades, rewritten query, correction status) is returned in every response via the `crag` field. When correction fails too, the system refuses rather than hallucinates.
-- **Resilient providers**: LLM generation runs on OpenCode Zen free models with automatic model failover; embeddings use Gemini with per-model daily-quota detection, a fallback chain, disk caching, and graceful degradation to BM25-only retrieval when quota is exhausted.
+- **Resilient providers**: LLM generation supports Gemini and OpenCode Zen free models with automatic model failover; embeddings use Gemini with per-model daily-quota detection, a fallback chain, disk caching, and graceful degradation to BM25-only retrieval when quota is exhausted.
 - **Caching**: exact-match Redis cache on (question, top_k) — repeat queries return instantly
 - **Evaluation harness**: golden Q&A dataset, keyword recall + LLM-judged faithfulness metrics
 - **Containerized**: one `docker compose up` starts everything
@@ -83,7 +83,7 @@ uv run python gradio_app.py     # open http://localhost:7861
 | `/api/v1/papers` | GET | List indexed papers |
 | `/api/v1/search` | POST | Search: `"mode": "bm25" \| "vector" \| "hybrid"` |
 | `/api/v1/ask` | POST | RAG answer + citations (JSON) |
-| `/api/v1/ask/stream` | POST | SSE token stream (`sources` → `token*` → `done`) |
+| `/api/v1/ask/stream` | POST | SSE token stream (`sources` → `crag` → `guardrail` → `token*` → `done`) |
 
 Example:
 
@@ -114,7 +114,7 @@ Results land in `evals/results.json`. Metric definitions follow standard RAG eva
 uv run pytest tests/ -v
 ```
 
-Unit tests cover chunking invariants (size bounds, empty input) and RRF fusion semantics (dual-list boost, ordering).
+63 tests covering chunking invariants (size bounds, empty input), RRF fusion semantics (dual-list boost, ordering), CRAG grading/rewrite routing, LangGraph compilation, embedding cache, reranker, LLM context formatting, and the evaluation/regression framework (metrics, deduplication, judge isolation) — all offline, no network required.
 
 ## Configuration
 
@@ -164,7 +164,7 @@ uv run python -c "import sys; sys.path.insert(0,'.'); from src.services.agent_gr
 
 ## Benchmark: chunking & retrieval ablation
 
-Six chunking configurations × three retrieval modes, evaluated on an 8-question golden set (`evals/golden_retrieval.jsonl`) with `BAAI/bge-base-en-v1.5` embeddings:
+Six chunking configurations × four retrieval modes (`bm25`, `vector`, `hybrid`, `hybrid_rerank`), evaluated on an 8-question golden set (`evals/golden_retrieval.jsonl`) with `BAAI/bge-base-en-v1.5` embeddings (24 runs in `evals/benchmark_results.json`; hybrid highlights below):
 
 | Config | Strategy | Size / Overlap | Mode | hit@5 | MRR |
 |---|---|---|---|---|---|

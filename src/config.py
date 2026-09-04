@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
     gemini_chat_model: str = "gemini-3.5-flash-lite"
-    gemini_embedding_model: str = "text-embedding-004"
+    gemini_embedding_model: str = "gemini-embedding-001"
     embed_fallback_models: str = "gemini-embedding-2"
     embedding_provider: str = "gemini"
     local_embed_model: str = "BAAI/bge-base-en-v1.5"
